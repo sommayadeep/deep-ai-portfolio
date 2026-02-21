@@ -123,7 +123,7 @@ export default function HomePage() {
           <h2 className="mt-2 text-2xl text-white">Initiate Collaboration Request</h2>
           <p className="mt-3 text-sm text-blue-100">POST /connect with your problem statement. Expected response: production-grade AI engineering.</p>
           <div className="mt-4 flex flex-wrap gap-2 text-xs">
-            <a className="rounded-md border border-cyan-200/20 bg-cyan-400/10 px-3 py-2" href="mailto:sommayadeep@example.com">Email Node</a>
+            <a className="rounded-md border border-cyan-200/20 bg-cyan-400/10 px-3 py-2" href="mailto:sommayadeepsaha@gmail.com">Email Node</a>
             <a className="rounded-md border border-cyan-200/20 bg-cyan-400/10 px-3 py-2" href="https://github.com/sommayadeep" target="_blank" rel="noreferrer">GitHub Node</a>
             <a className="rounded-md border border-cyan-200/20 bg-cyan-400/10 px-3 py-2" href="https://www.linkedin.com/in/sommayadeep-saha-127baa335/" target="_blank" rel="noreferrer">LinkedIn Node</a>
           </div>
