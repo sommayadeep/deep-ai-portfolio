@@ -40,7 +40,11 @@ export function estimateComplexity(code: string): string {
   const clean = code.replace(/\s+/g, " ").toLowerCase();
   const nestedLoops = (clean.match(/for\s*\(/g)?.length ?? 0) + (clean.match(/while\s*\(/g)?.length ?? 0);
   const hasSort = /\.sort\(|quicksort|mergesort|heapsort/.test(clean);
-  const hasRecursion = /function\s+\w+\([^)]*\)\s*\{[^}]*\1\(/.test(clean);
+  const functionNames = [...clean.matchAll(/function\s+([a-z_]\w*)\s*\(/g)].map((m) => m[1]);
+  const hasRecursion = functionNames.some((name) => {
+    const calls = clean.match(new RegExp(`${name}\\s*\\(`, "g"))?.length ?? 0;
+    return calls > 1;
+  });
 
   if (nestedLoops >= 2) return "O(n^2) likely (nested iteration detected)";
   if (hasSort) return "O(n log n) likely (sorting behavior detected)";
