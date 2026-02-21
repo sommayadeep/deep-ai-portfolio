@@ -113,6 +113,10 @@ function localAnswer(prompt: string): string {
     return "LinkedIn: https://www.linkedin.com/in/sommayadeep-saha-127baa335/";
   }
 
+  if (text.includes("email") || text.includes("mail") || text.includes("contact")) {
+    return "Email: sommayadeepsaha@gmail.com";
+  }
+
   if (text.includes("skill") || text.includes("stack")) {
     const modules = profile.modules
       .map((m) => `${m.title}: ${m.items.join(", ")}`)
@@ -161,6 +165,7 @@ export async function POST(req: Request) {
       `CGPA: ${profile.cgpa.toFixed(1)}+`,
       `GitHub: https://github.com/sommayadeep`,
       `LinkedIn: https://www.linkedin.com/in/sommayadeep-saha-127baa335/`,
+      "Email: sommayadeepsaha@gmail.com",
       `Projects: ${profile.deployments
         .map(
           (p) =>
@@ -168,7 +173,8 @@ export async function POST(req: Request) {
         )
         .join(" || ")}`,
       "If user asks for a specific project link, return direct repo/live URLs.",
-      "If user asks what is behind a project, return its short technical explanation."
+      "If user asks what is behind a project, return its short technical explanation.",
+      "If user asks for contact or email, return the exact email."
     ].join("\n");
 
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
