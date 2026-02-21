@@ -24,7 +24,7 @@ export default function MemoryBanner() {
 
   return (
     <div className="glass rounded-xl px-4 py-3 text-sm text-cyan-100">
-      <span className="panel-title mr-2 text-[11px] text-cyan-200/70">Memory Layer</span>
+      <span className="panel-title mr-2 text-[11px] text-cyan-200/70">Memory Layer:</span>
       {message}
     </div>
   );

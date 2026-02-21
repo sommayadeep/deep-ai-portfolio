@@ -3,6 +3,10 @@ import { profile } from "@/data/profile";
 
 type Deployment = (typeof profile.deployments)[number];
 
+function hasAny(text: string, patterns: string[]): boolean {
+  return patterns.some((pattern) => text.includes(pattern));
+}
+
 function levenshtein(a: string, b: string): number {
   const dp = Array.from({ length: a.length + 1 }, () => Array<number>(b.length + 1).fill(0));
   for (let i = 0; i <= a.length; i += 1) dp[i][0] = i;
@@ -23,6 +27,24 @@ function levenshtein(a: string, b: string): number {
 function findProject(prompt: string): Deployment | null {
   const text = prompt.toLowerCase();
   const promptCompact = text.replace(/[^a-z0-9]/g, "");
+  const likelyProjectQuery = hasAny(text, [
+    "project",
+    "repo",
+    "github",
+    "link",
+    "live",
+    "deploy",
+    "built",
+    "behind",
+    "architecture",
+    "certitrust",
+    "sugar",
+    "trilingo",
+    "student",
+    "turbofan",
+    "algoviz",
+    "mahendra"
+  ]);
   const labelsFor = (project: Deployment) =>
     [project.name, ...(project.aliases ?? [])].map((value) => value.toLowerCase());
 
@@ -57,7 +79,7 @@ function findProject(prompt: string): Deployment | null {
       }
     }
   }
-  if (best && best.distance <= 3) return best.project;
+  if (likelyProjectQuery && best && best.distance <= 2) return best.project;
 
   return (
     null
@@ -66,37 +88,79 @@ function findProject(prompt: string): Deployment | null {
 
 function localAnswer(prompt: string): string {
   const text = prompt.toLowerCase();
+  const asksAboutOwner = hasAny(text, [
+    "owner",
+    "who made",
+    "who built",
+    "who are you",
+    "about you",
+    "your creator",
+    "yourself",
+    "tell me about yourself",
+    "introduce yourself"
+  ]);
+  const asksAllProjectsDetailed = hasAny(text, [
+    "describe all project",
+    "describe all projects",
+    "explain all project",
+    "explain all projects",
+    "tell me all projects",
+    "all projects in detail"
+  ]);
+  const asksAllProjectsList = hasAny(text, [
+    "all project",
+    "all projects",
+    "list project",
+    "list projects",
+    "show projects"
+  ]);
   const matchedProject = findProject(prompt);
-  const asksBehind =
-    text.includes("behind") ||
-    text.includes("how built") ||
-    text.includes("how it works") ||
-    text.includes("architecture") ||
-    text.includes("explain project") ||
-    text.includes("describe") ||
-    text.includes("about this project") ||
-    text.includes("tell me about");
+  const asksBehind = hasAny(text, [
+    "behind",
+    "how built",
+    "how it works",
+    "architecture",
+    "explain project",
+    "about this project"
+  ]);
+
+  if (asksAboutOwner) {
+    return `${profile.name} is the owner and builder of this portfolio. ${profile.summary} Current focus: ${profile.title}.`;
+  }
+
+  if (asksAllProjectsDetailed) {
+    return profile.deployments
+      .map(
+        (p, idx) =>
+          `${idx + 1}. ${p.name} (${p.type}) - ${p.impact} Behind it: ${p.behind} Repo: ${p.repoUrl}${p.liveUrl ? ` | Live: ${p.liveUrl}` : " | Live: Not Deployed Yet"}`
+      )
+      .join("\n");
+  }
 
   if (matchedProject && asksBehind) {
     return `${matchedProject.name}: ${matchedProject.behind}`;
   }
 
+  if (matchedProject && text.includes("tell me about")) {
+    return `${matchedProject.name}: ${matchedProject.impact} Behind it: ${matchedProject.behind}`;
+  }
+
   if (matchedProject && (text.includes("link") || text.includes("live") || text.includes("repo") || text.includes("github"))) {
     const livePart = matchedProject.liveUrl
       ? `Live: ${matchedProject.liveUrl}`
-      : "Live: Not deployed yet";
+      : "Live: Not Deployed Yet";
     return `${matchedProject.name} -> Repo: ${matchedProject.repoUrl} | ${livePart}`;
   }
 
   if (text.includes("all links") || text.includes("all project links")) {
     return profile.deployments
-      .map((p) => `${p.name} -> Repo: ${p.repoUrl} | Live: ${p.liveUrl || "Not deployed yet"}`)
+      .map((p) => `${p.name} -> Repo: ${p.repoUrl} | Live: ${p.liveUrl || "Not Deployed Yet"}`)
       .join(" | ");
   }
 
-  if (text.includes("project") || text.includes("deploy")) {
+  if (asksAllProjectsList || text.includes("project") || text.includes("deploy")) {
     const list = profile.deployments
-      .map((p) => `${p.name} (Repo: ${p.repoUrl}${p.liveUrl ? `, Live: ${p.liveUrl}` : ", Live: Not deployed yet"})`)
+      .map((p) => `${p.name} (Repo: ${p.repoUrl}${p.liveUrl ? `, Live: ${p.liveUrl}` : ", Live: Not Deployed Yet"})`)
       .join(" | ");
     return `Sommayadeep has ${profile.deployments.length} featured projects: ${list}`;
   }
@@ -169,7 +233,7 @@ export async function POST(req: Request) {
       `Projects: ${profile.deployments
         .map(
           (p) =>
-            `${p.name} | Repo: ${p.repoUrl} | Live: ${p.liveUrl || "Not deployed yet"} | Behind: ${p.behind}`
+            `${p.name} | Repo: ${p.repoUrl} | Live: ${p.liveUrl || "Not Deployed Yet"} | Behind: ${p.behind}`
         )
         .join(" || ")}`,
       "If user asks for a specific project link, return direct repo/live URLs.",
