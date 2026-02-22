@@ -132,6 +132,10 @@ header[id] {
   scroll-margin-top: 96px;
 }
 
+.assistant-section-highlight {
+  animation: sectionFlash 1.8s ease;
+}
+
 @keyframes ripple {
   0% {
     opacity: 0.4;
@@ -172,5 +176,17 @@ header[id] {
   }
   50% {
     box-shadow: 0 0 0 1px rgba(89, 246, 255, 0.3), 0 0 38px rgba(89, 246, 255, 0.35);
+  }
+}
+
+@keyframes sectionFlash {
+  0% {
+    box-shadow: 0 0 0 0 rgba(89, 246, 255, 0);
+  }
+  25% {
+    box-shadow: 0 0 0 3px rgba(89, 246, 255, 0.75), 0 0 26px rgba(89, 246, 255, 0.35);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(89, 246, 255, 0);
   }
 }

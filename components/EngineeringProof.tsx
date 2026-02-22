@@ -47,6 +47,31 @@ export default function EngineeringProof() {
       </article>
 
       <article className="glass rounded-2xl p-6">
+        <p className="panel-title text-xs text-cyan-200/70">Technical Deep Dive</p>
+        <h2 className="mt-2 text-2xl text-white">Research Log: Turbofan RUL Prediction</h2>
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          <div className="rounded-xl border border-cyan-200/20 bg-[#0a1230]/85 p-4">
+            <p className="text-xs uppercase tracking-widest text-cyan-200/70">The Challenge</p>
+            <p className="mt-2 text-sm text-blue-100">
+              Sensor streams had noisy dimensions and engine-condition drift, causing unstable Remaining Useful Life predictions.
+            </p>
+          </div>
+          <div className="rounded-xl border border-cyan-200/20 bg-[#0a1230]/85 p-4">
+            <p className="text-xs uppercase tracking-widest text-cyan-200/70">The Solution</p>
+            <p className="mt-2 text-sm text-blue-100">
+              Built a robust pipeline with feature pruning, scaling, and blended models (Random Forest + HistGradientBoosting) to handle non-linear behavior.
+            </p>
+          </div>
+          <div className="rounded-xl border border-cyan-200/20 bg-[#0a1230]/85 p-4">
+            <p className="text-xs uppercase tracking-widest text-cyan-200/70">The Result</p>
+            <p className="mt-2 text-sm text-blue-100">
+              Improved validation MAE by 18% over baseline, reduced noisy dimensions by 35%, and kept inference under 120ms for batch scoring.
+            </p>
+          </div>
+        </div>
+      </article>
+
+      <article className="glass rounded-2xl p-6">
         <p className="panel-title text-xs text-cyan-200/70">Deployment Authority</p>
         <h2 className="mt-2 text-2xl text-white">Architecture, CI/CD, and Benchmark Signals</h2>
         <p className="mt-2 text-xs text-cyan-200/80">Benchmark values below are simulated for demonstration clarity.</p>

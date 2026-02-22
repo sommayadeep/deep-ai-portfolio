@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import { profile } from "@/data/profile";
 
 type Deployment = (typeof profile.deployments)[number];
+type AssistantAction = {
+  type: "scroll_to";
+  targetId: string;
+  highlight?: boolean;
+};
 
 function hasAny(text: string, patterns: string[]): boolean {
   return patterns.some((pattern) => text.includes(pattern));
@@ -199,6 +204,28 @@ function localAnswer(prompt: string): string {
   return "Ask me about projects, all project links, CGPA, skills, blockchain work, GitHub, LinkedIn, or what is behind a project.";
 }
 
+function detectUiActions(prompt: string): AssistantAction[] {
+  const text = prompt.toLowerCase();
+  const actions: AssistantAction[] = [];
+  const push = (targetId: string) => {
+    if (!actions.some((action) => action.targetId === targetId)) {
+      actions.push({ type: "scroll_to", targetId, highlight: true });
+    }
+  };
+
+  if (hasAny(text, ["sentiment", "complexity", "resume analyzer", "neuralhire", "ai tools"])) push("ai-tools");
+  if (hasAny(text, ["engineering proof", "deep dive", "architecture", "research log"])) push("engineering-proof");
+  if (hasAny(text, ["connect", "contact", "email", "linkedin", "github node"])) push("connect-protocol");
+  if (hasAny(text, ["metrics", "dashboard", "mission control", "status"])) push("mission-control");
+
+  const projectMatch = findProject(prompt);
+  if (projectMatch || hasAny(text, ["deployment", "deployments", "project", "projects", "live link", "repo"])) {
+    push("ai-deployments");
+  }
+
+  return actions;
+}
+
 export async function POST(req: Request) {
   let prompt = "";
   try {
@@ -217,7 +244,7 @@ export async function POST(req: Request) {
       apiKey !== "your_openai_api_key" &&
       apiKey !== "sk-your-key-here";
     if (!hasValidApiKey) {
-      return NextResponse.json({ answer: localAnswer(prompt), source: "local" });
+      return NextResponse.json({ answer: localAnswer(prompt), source: "local", actions: detectUiActions(prompt) });
     }
 
     const system = [
@@ -258,20 +285,20 @@ export async function POST(req: Request) {
     });
 
     if (!response.ok) {
-      return NextResponse.json({ answer: localAnswer(prompt), source: "fallback" });
+      return NextResponse.json({ answer: localAnswer(prompt), source: "fallback", actions: detectUiActions(prompt) });
     }
 
     const data = await response.json();
     const answer = data?.choices?.[0]?.message?.content?.trim();
     if (!answer) {
-      return NextResponse.json({ answer: localAnswer(prompt), source: "fallback" });
+      return NextResponse.json({ answer: localAnswer(prompt), source: "fallback", actions: detectUiActions(prompt) });
     }
 
-    return NextResponse.json({ answer, source: "openai" });
+    return NextResponse.json({ answer, source: "openai", actions: detectUiActions(prompt) });
   } catch {
     const safeFallback = prompt
       ? localAnswer(prompt)
       : "Ask me about projects, links, CGPA, skills, GitHub, LinkedIn, or what is behind a project.";
-    return NextResponse.json({ answer: safeFallback, source: "fallback-error" }, { status: 200 });
+    return NextResponse.json({ answer: safeFallback, source: "fallback-error", actions: detectUiActions(prompt) }, { status: 200 });
   }
 }

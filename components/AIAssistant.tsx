@@ -7,6 +7,12 @@ type ChatMessage = {
   content: string;
 };
 
+type ChatAction = {
+  type: "scroll_to";
+  targetId: string;
+  highlight?: boolean;
+};
+
 type SpeechCtor = new () => {
   lang: string;
   interimResults: boolean;
@@ -97,8 +103,10 @@ export default function AIAssistant() {
         typeof data?.answer === "string" && data.answer.trim()
           ? data.answer
           : "I could not parse that request. Ask again.";
+      const actions: ChatAction[] = Array.isArray(data?.actions) ? data.actions : [];
 
       setChat((prev) => [...prev, { role: "assistant", content: answer }]);
+      actions.forEach((action) => executeAction(action));
     } catch {
       setChat((prev) => [
         ...prev,
@@ -106,6 +114,18 @@ export default function AIAssistant() {
       ]);
     } finally {
       setIsLoading(false);
+    }
+  }
+
+  function executeAction(action: ChatAction) {
+    if (action.type !== "scroll_to") return;
+    const target = document.getElementById(action.targetId);
+    if (!target) return;
+
+    target.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (action.highlight) {
+      target.classList.add("assistant-section-highlight");
+      window.setTimeout(() => target.classList.remove("assistant-section-highlight"), 1800);
     }
   }
 

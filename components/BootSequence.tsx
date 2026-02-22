@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 
 const lines = [
   "Initializing DEEP.AI v4.0",
@@ -12,9 +12,16 @@ const lines = [
 ];
 
 export default function BootSequence({ onDone }: { onDone: () => void }) {
+  const reduceMotion = useReducedMotion();
   const [visibleLines, setVisibleLines] = useState(0);
 
   useEffect(() => {
+    if (reduceMotion) {
+      setVisibleLines(lines.length);
+      const doneTimer = setTimeout(onDone, 120);
+      return () => clearTimeout(doneTimer);
+    }
+
     if (visibleLines < lines.length) {
       const timer = setTimeout(() => setVisibleLines((v) => v + 1), 550);
       return () => clearTimeout(timer);
@@ -22,7 +29,7 @@ export default function BootSequence({ onDone }: { onDone: () => void }) {
 
     const doneTimer = setTimeout(onDone, 900);
     return () => clearTimeout(doneTimer);
-  }, [onDone, visibleLines]);
+  }, [onDone, reduceMotion, visibleLines]);
 
   return (
     <AnimatePresence>
