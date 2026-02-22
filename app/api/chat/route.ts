@@ -11,6 +11,14 @@ type AssistantAction = {
   targetId: string;
   projectKey: string;
   highlight?: boolean;
+} | {
+  type: "open_snippet";
+  snippetId: "sentiment" | "complexity" | "resume";
+} | {
+  type: "role_match";
+  skills: string[];
+  projects: string[];
+  summary: string;
 };
 
 function hasAny(text: string, patterns: string[]): boolean {
@@ -98,6 +106,68 @@ function findProject(prompt: string): Deployment | null {
 
 function projectKey(name: string) {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+}
+
+function normalizeToken(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9+.#]/g, "");
+}
+
+function roleKeywords(prompt: string) {
+  return new Set(
+    prompt
+      .toLowerCase()
+      .split(/[^a-z0-9+.#]+/)
+      .map((token) => token.trim())
+      .filter((token) => token.length >= 2)
+      .map(normalizeToken)
+  );
+}
+
+function detectRoleMatch(prompt: string) {
+  const text = prompt.toLowerCase();
+  const looksLikeJobDescription =
+    text.length > 180 ||
+    hasAny(text, [
+      "job description",
+      "responsibilities",
+      "requirements",
+      "qualification",
+      "we are hiring",
+      "role overview",
+      "must have",
+      "preferred"
+    ]);
+  if (!looksLikeJobDescription && !hasAny(text, ["analyze my role", "analyze this role", "match this role"])) {
+    return null;
+  }
+
+  const tokens = roleKeywords(prompt);
+  const matchedSkills: string[] = [];
+  for (const module of profile.modules) {
+    for (const item of module.items) {
+      const token = normalizeToken(item);
+      if (tokens.has(token) || tokens.has(token.replace(/\./g, ""))) matchedSkills.push(item);
+    }
+  }
+
+  const projectScores = profile.deployments.map((project) => {
+    const bag = `${project.name} ${project.type} ${project.impact} ${project.behind} ${(project.aliases ?? []).join(" ")}`.toLowerCase();
+    let score = 0;
+    for (const token of tokens) {
+      if (token.length < 3) continue;
+      if (bag.includes(token)) score += 1;
+    }
+    return { key: projectKey(project.name), score };
+  });
+  projectScores.sort((a, b) => b.score - a.score);
+  const projects = projectScores.filter((item) => item.score > 0).slice(0, 3).map((item) => item.key);
+  const skills = [...new Set(matchedSkills)].slice(0, 8);
+
+  const summary = skills.length || projects.length
+    ? `Role analysis complete. Matched ${skills.length} skill signals and ${projects.length} project signals.`
+    : "Role analysis complete. No strong direct match found; consider broadening required stack keywords.";
+
+  return { skills, projects, summary };
 }
 
 function localAnswer(prompt: string): string {
@@ -210,6 +280,26 @@ function localAnswer(prompt: string): string {
     return "Trilingo is a language conversion project focused on practical multilingual communication.";
   }
 
+  if (hasAny(text, ["show me the sentiment pulse code", "show sentiment code", "sentiment pulse logic", "sentiment codde"])) {
+    return "Opening Sentiment Pulse logic now.";
+  }
+
+  if (hasAny(text, ["show me the complexity oracle code", "show complexity code", "complexity logic", "complexity codde"])) {
+    return "Opening Complexity Oracle logic now.";
+  }
+
+  if (hasAny(text, ["show me the resume analyzer code", "show resume code", "resume scoring code", "resume codde"])) {
+    return "Opening NeuralHire Analyzer logic now.";
+  }
+
+  if (hasAny(text, ["architecture ci/cd", "ci/cd", "benchmark signals", "deployment authority code", "show architecture code"])) {
+    return "Opening Architecture, CI/CD, and Benchmark Signals section now.";
+  }
+
+  if (hasAny(text, ["analyze my role", "analyze this role", "job description"])) {
+    return "Role analysis requested. I will map this role to portfolio skills and projects and highlight the best matches.";
+  }
+
   return "Ask me about projects, all project links, CGPA, skills, blockchain work, GitHub, LinkedIn, or what is behind a project.";
 }
 
@@ -217,7 +307,7 @@ function detectUiActions(prompt: string): AssistantAction[] {
   const text = prompt.toLowerCase();
   const actions: AssistantAction[] = [];
   const push = (targetId: string) => {
-    if (!actions.some((action) => action.targetId === targetId)) {
+    if (!actions.some((action) => "targetId" in action && action.targetId === targetId)) {
       actions.push({ type: "scroll_to", targetId, highlight: true });
     }
   };
@@ -246,6 +336,33 @@ function detectUiActions(prompt: string): AssistantAction[] {
     });
   } else if (hasAny(text, ["deployment", "deployments", "project", "projects", "live link", "repo"])) {
     push("ai-deployments");
+  }
+
+  if (hasAny(text, ["sentiment pulse code", "show sentiment code", "sentiment logic", "sentiment codde"])) {
+    actions.push({ type: "open_snippet", snippetId: "sentiment" });
+    push("ai-tools");
+  }
+  if (hasAny(text, ["complexity code", "complexity logic", "complexity codde"])) {
+    actions.push({ type: "open_snippet", snippetId: "complexity" });
+    push("ai-tools");
+  }
+  if (hasAny(text, ["resume analyzer code", "resume scoring code", "resume codde"])) {
+    actions.push({ type: "open_snippet", snippetId: "resume" });
+    push("ai-tools");
+  }
+  if (hasAny(text, ["architecture ci/cd", "ci/cd", "benchmark signals", "deployment authority code", "show architecture code"])) {
+    push("engineering-proof");
+  }
+
+  const roleMatch = detectRoleMatch(prompt);
+  if (roleMatch) {
+    actions.push({
+      type: "role_match",
+      skills: roleMatch.skills,
+      projects: roleMatch.projects,
+      summary: roleMatch.summary
+    });
+    push("technical-modules");
   }
 
   return actions;

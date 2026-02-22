@@ -20,7 +20,19 @@ type FocusProjectAction = {
   highlight?: boolean;
 };
 
-type ChatAction = ScrollAction | FocusProjectAction;
+type OpenSnippetAction = {
+  type: "open_snippet";
+  snippetId: "sentiment" | "complexity" | "resume";
+};
+
+type RoleMatchAction = {
+  type: "role_match";
+  skills: string[];
+  projects: string[];
+  summary: string;
+};
+
+type ChatAction = ScrollAction | FocusProjectAction | OpenSnippetAction | RoleMatchAction;
 
 type SpeechCtor = new () => {
   lang: string;
@@ -127,6 +139,21 @@ export default function AIAssistant() {
   }
 
   function executeAction(action: ChatAction) {
+    if (action.type === "open_snippet") {
+      window.dispatchEvent(new CustomEvent("assistant-open-snippet", { detail: { snippetId: action.snippetId } }));
+      return;
+    }
+
+    if (action.type === "role_match") {
+      window.dispatchEvent(
+        new CustomEvent("assistant-role-match", {
+          detail: { skills: action.skills, projects: action.projects, summary: action.summary }
+        })
+      );
+      setChat((prev) => [...prev, { role: "assistant", content: action.summary }]);
+      return;
+    }
+
     const target = document.getElementById(action.targetId);
     if (target) {
       target.scrollIntoView({ behavior: "smooth", block: "start" });

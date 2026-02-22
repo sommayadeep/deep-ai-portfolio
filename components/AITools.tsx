@@ -12,6 +12,7 @@ export default function AITools({ onToneChange }: { onToneChange: (tone: Tone) =
   const [resumeInput, setResumeInput] = useState("");
   const [transparencyTool, setTransparencyTool] = useState<"sentiment" | "complexity" | "resume">("sentiment");
   const [simulationRun, setSimulationRun] = useState(1);
+  const [openSnippet, setOpenSnippet] = useState<null | "sentiment" | "complexity" | "resume">(null);
 
   const sentimentAnalysis = useMemo(
     () => (sentimentInput ? analyzeSentiment(sentimentInput) : null),
@@ -43,6 +44,16 @@ export default function AITools({ onToneChange }: { onToneChange: (tone: Tone) =
     else if (sentimentAnalysis?.label === "Stressed") onToneChange("stressed");
     else onToneChange("neutral");
   }, [onToneChange, sentimentAnalysis, sentimentInput]);
+
+  useEffect(() => {
+    const onSnippet = (event: Event) => {
+      const custom = event as CustomEvent<{ snippetId?: "sentiment" | "complexity" | "resume" }>;
+      const id = custom.detail?.snippetId;
+      if (id) setOpenSnippet(id);
+    };
+    window.addEventListener("assistant-open-snippet", onSnippet as EventListener);
+    return () => window.removeEventListener("assistant-open-snippet", onSnippet as EventListener);
+  }, []);
 
   const transparency = {
     sentiment: {
@@ -251,8 +262,37 @@ export default function AITools({ onToneChange }: { onToneChange: (tone: Tone) =
           <LiveMLVisualization tool={transparencyTool} seed={simulationSeed} />
         </div>
       </article>
+
+      {openSnippet ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#02040c]/85 p-4" onClick={() => setOpenSnippet(null)}>
+          <div className="glass w-full max-w-3xl rounded-2xl p-5" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <p className="panel-title text-xs text-cyan-200/70">Proof of Action: {openSnippet} logic</p>
+              <button
+                className="ripple-btn rounded-md border border-cyan-200/25 bg-cyan-400/10 px-3 py-1 text-xs text-cyan-100"
+                onClick={() => setOpenSnippet(null)}
+              >
+                Close
+              </button>
+            </div>
+            <pre className="mt-3 overflow-x-auto rounded-xl border border-cyan-200/15 bg-[#08102a] p-4 text-xs text-cyan-100">
+{snippetText(openSnippet)}
+            </pre>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
+}
+
+function snippetText(snippet: "sentiment" | "complexity" | "resume") {
+  if (snippet === "sentiment") {
+    return `// Sentiment pulse (abridged)\nconst analysis = analyzeSentiment(input);\n// returns: label, confidence, score, toneType, emotionalIntensity, professionalAssertiveness`;
+  }
+  if (snippet === "complexity") {
+    return `// Complexity oracle (abridged)\nconst result = explainComplexity(code);\n// returns: timeComplexity, spaceComplexity, reasoning, derivation`;
+  }
+  return `// Resume analyzer (abridged)\nconst report = scoreResume(resumeText);\n// returns: score + actionable reviewer feedback`;
 }
 
 function ToolCard({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {

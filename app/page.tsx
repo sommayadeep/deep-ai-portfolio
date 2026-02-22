@@ -23,6 +23,9 @@ export default function HomePage() {
   const [allowPointerEffects, setAllowPointerEffects] = useState(false);
   const [isZooming, setIsZooming] = useState(false);
   const [viewportScale, setViewportScale] = useState(1);
+  const [matchedSkills, setMatchedSkills] = useState<string[]>([]);
+  const [matchedProjects, setMatchedProjects] = useState<string[]>([]);
+  const [roleMatchSummary, setRoleMatchSummary] = useState<string | null>(null);
   const reduceMotion = useReducedMotion();
 
   const nav = useMemo(
@@ -110,6 +113,20 @@ export default function HomePage() {
     return () => observer.disconnect();
   }, [sectionOrder]);
 
+  useEffect(() => {
+    const onRoleMatch = (event: Event) => {
+      const custom = event as CustomEvent<{ skills?: string[]; projects?: string[]; summary?: string }>;
+      const skills = (custom.detail?.skills ?? []).map((item) => toSkillKey(item));
+      const projects = custom.detail?.projects ?? [];
+      setMatchedSkills(skills);
+      setMatchedProjects(projects);
+      setRoleMatchSummary(custom.detail?.summary ?? "Role match applied.");
+    };
+
+    window.addEventListener("assistant-role-match", onRoleMatch as EventListener);
+    return () => window.removeEventListener("assistant-role-match", onRoleMatch as EventListener);
+  }, []);
+
   const effectsEnabled = allowPointerEffects && !reduceMotion && !isZooming && Math.abs(viewportScale - 1) < 0.001;
   const parallaxX = effectsEnabled ? `${(cursor.x / 130) * -1 + 5}px` : "0px";
   const parallaxY = effectsEnabled ? `${(cursor.y / 160) * -1 + 5}px` : "0px";
@@ -165,6 +182,23 @@ export default function HomePage() {
         <EngineeringProof />
         <TechnicalLogs />
 
+        {roleMatchSummary ? (
+          <article className="glass rounded-2xl border border-cyan-200/30 p-4 text-sm text-cyan-100">
+            <p className="panel-title text-xs text-cyan-200/70">Recruiter Context</p>
+            <p className="mt-1">{roleMatchSummary}</p>
+            <button
+              className="ripple-btn mt-2 rounded-md border border-cyan-200/20 bg-cyan-400/10 px-3 py-1 text-xs text-cyan-100"
+              onClick={() => {
+                setMatchedProjects([]);
+                setMatchedSkills([]);
+                setRoleMatchSummary(null);
+              }}
+            >
+              Clear Highlights
+            </button>
+          </article>
+        ) : null}
+
         <motion.section
           id="technical-modules"
           className="grid gap-4 md:grid-cols-2"
@@ -179,7 +213,14 @@ export default function HomePage() {
               <h3 className="mt-1 text-xl text-white">{module.title}</h3>
               <div className="mt-3 flex flex-wrap gap-2">
                 {module.items.map((item) => (
-                  <span key={item} className="rounded-full border border-cyan-200/20 bg-[#0a1230] px-3 py-1 text-xs text-cyan-100">
+                  <span
+                    key={item}
+                    className={
+                      matchedSkills.includes(toSkillKey(item))
+                        ? "rounded-full border border-cyan-300/70 bg-cyan-400/20 px-3 py-1 text-xs text-cyan-50"
+                        : "rounded-full border border-cyan-200/20 bg-[#0a1230] px-3 py-1 text-xs text-cyan-100"
+                    }
+                  >
                     {item}
                   </span>
                 ))}
@@ -202,7 +243,11 @@ export default function HomePage() {
               <motion.article
                 key={project.name}
                 data-project-key={toProjectKey(project.name)}
-                className="magnetic rounded-xl border border-cyan-200/20 bg-[#0a1230]/85 p-4"
+                className={
+                  matchedProjects.includes(toProjectKey(project.name))
+                    ? "magnetic rounded-xl border border-cyan-300/70 bg-cyan-400/10 p-4"
+                    : "magnetic rounded-xl border border-cyan-200/20 bg-[#0a1230]/85 p-4"
+                }
                 initial={{ opacity: 0, y: 16 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, amount: 0.2 }}
@@ -268,4 +313,8 @@ export default function HomePage() {
 
 function toProjectKey(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+}
+
+function toSkillKey(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9+.#]/g, "");
 }
