@@ -1,39 +1,374 @@
-export function detectSentiment(text: string): "Motivated" | "Curious" | "Neutral" | "Stressed" {
+export type SentimentLabel = "Motivated" | "Curious" | "Neutral" | "Stressed";
+
+export type SentimentAnalysis = {
+  label: SentimentLabel;
+  confidence: number;
+  score: number;
+  review: string;
+  signals: string[];
+  toneType: "Declarative / Informational" | "Declarative / Achievement-Oriented" | "Exploratory" | "Pressure / Strain" | "Strategic / Planning";
+  emotionalIntensity: "Low" | "Moderate" | "High";
+  professionalAssertiveness: number;
+};
+
+const NEGATIONS = new Set(["not", "never", "no", "dont", "don't", "cant", "can't", "won't"]);
+const INTENSIFIERS = new Set(["very", "really", "extremely", "super", "so", "deeply", "highly", "totally"]);
+const SOFTENERS = new Set(["slightly", "somewhat", "kindof", "kinda", "maybe", "perhaps"]);
+
+const MOTIVATED_WEIGHTS: Record<string, number> = {
+  excited: 2.2,
+  confident: 2,
+  proud: 1.8,
+  love: 1.6,
+  loved: 1.8,
+  enjoy: 1.6,
+  enjoyed: 1.7,
+  great: 1.4,
+  awesome: 1.8,
+  ready: 1.3,
+  progress: 1.5,
+  growth: 1.6,
+  improving: 1.7,
+  improve: 1.5,
+  developed: 1.3,
+  success: 1.9,
+  successful: 1.9,
+  motivated: 2.2,
+  shipped: 1.7,
+  ship: 1.4,
+  solved: 1.4,
+  build: 1.1
+};
+
+const STRESSED_WEIGHTS: Record<string, number> = {
+  stuck: 2.4,
+  overwhelmed: 2.5,
+  anxious: 2.3,
+  worried: 2.1,
+  frustrated: 2.4,
+  stressed: 2.4,
+  stress: 1.8,
+  exhausted: 2.2,
+  tired: 1.5,
+  failing: 2,
+  failure: 2,
+  hopeless: 2.8,
+  awful: 2.2,
+  terrible: 2.4,
+  worst: 2.3,
+  upset: 1.7,
+  angry: 2
+};
+
+const CURIOUS_WEIGHTS: Record<string, number> = {
+  how: 1.6,
+  why: 1.6,
+  what: 1.1,
+  learn: 1.9,
+  exploring: 1.8,
+  explore: 1.8,
+  curious: 2.2,
+  discover: 1.8,
+  understand: 1.6,
+  question: 1.6
+};
+
+const ACHIEVEMENT_VERBS = new Set([
+  "built",
+  "complete",
+  "completed",
+  "done",
+  "developed",
+  "engineered",
+  "designed",
+  "implemented",
+  "deployed",
+  "optimized",
+  "launched",
+  "delivered",
+  "shipped",
+  "improved",
+  "led",
+  "created",
+  "train",
+  "trained",
+  "win",
+  "won",
+  "winner",
+  "winners",
+  "crack",
+  "cracked",
+  "cracker"
+]);
+
+const STRATEGIC_TERMS = new Set([
+  "strategy",
+  "strategic",
+  "plan",
+  "roadmap",
+  "prioritize",
+  "priority",
+  "tradeoff",
+  "impact",
+  "objective",
+  "milestone",
+  "execution"
+]);
+
+const UNCERTAINTY_TERMS = new Set([
+  "maybe",
+  "perhaps",
+  "might",
+  "unsure",
+  "uncertain",
+  "guess",
+  "probably",
+  "possibly"
+]);
+
+const TECH_IDENTITY_TERMS = new Set([
+  "ai",
+  "ml",
+  "machine",
+  "learning",
+  "blockchain",
+  "tensorflow",
+  "pytorch",
+  "llm",
+  "nlp",
+  "model",
+  "models",
+  "fullstack",
+  "full",
+  "stack"
+]);
+
+export function analyzeSentiment(text: string): SentimentAnalysis {
   const normalized = text.toLowerCase().trim();
-  if (!normalized) return "Neutral";
+  if (!normalized) {
+    return {
+      label: "Neutral",
+      confidence: 0,
+      score: 0,
+      review: "No sentiment signal yet. Add a sentence and I will assess tone.",
+      signals: [],
+      toneType: "Declarative / Informational",
+      emotionalIntensity: "Low",
+      professionalAssertiveness: 0
+    };
+  }
 
-  const cleaned = normalized.replace(/[^a-z0-9\s]/g, " ");
+  const normalizedSpaced = normalized.replace(/(\d)([a-z])/g, "$1 $2").replace(/([a-z])(\d)/g, "$1 $2");
+  const cleaned = normalizedSpaced.replace(/[^a-z0-9?!\s']/g, " ");
   const tokens = cleaned.split(/\s+/).filter(Boolean);
+  const toBase = (token: string) => {
+    if (token.endsWith("ing") && token.length > 5) return token.slice(0, -3);
+    if (token.endsWith("ed") && token.length > 4) return token.slice(0, -2);
+    if (token.endsWith("s") && token.length > 4) return token.slice(0, -1);
+    return token;
+  };
 
-  const motivatedTerms = [
-    "build", "win", "excited", "love", "ship", "ready", "great", "awesome", "confident", "progress",
-    "improve", "improving", "success", "successful", "motivated"
-  ];
-  const stressedTerms = [
-    "stuck", "tired", "overwhelmed", "anxious", "frustrated", "worried", "stress", "stressed", "bad",
-    "worst", "terrible", "awful", "hate", "failing", "failure", "hopeless", "angry", "upset"
-  ];
-  const curiousTerms = ["how", "why", "learn", "explore", "wonder", "what", "curious", "discover"];
+  let motivated = 0;
+  let stressed = 0;
+  let curious = 0;
+  let achievementScore = 0;
+  let strategicScore = 0;
+  let uncertaintyScore = 0;
+  let technicalIdentityScore = 0;
+  let emotionHits = 0;
+  let intentHits = 0;
+  const signals: string[] = [];
 
-  const strongNegativePhrase = /\b(this is|it is|i am|im)\s+(the\s+)?(worst|terrible|awful|hopeless)\b/.test(normalized);
-  if (strongNegativePhrase) return "Stressed";
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i];
+    const baseToken = toBase(token);
+    const prev = tokens[i - 1] ?? "";
+    const prev2 = tokens[i - 2] ?? "";
+    const negated = NEGATIONS.has(prev) || NEGATIONS.has(prev2);
+    const intensified = INTENSIFIERS.has(prev) || INTENSIFIERS.has(prev2);
+    const softened = SOFTENERS.has(prev) || SOFTENERS.has(prev2);
+    const multiplier = (intensified ? 1.35 : 1) * (softened ? 0.75 : 1);
 
-  const scoreTerms = (terms: string[]) =>
-    terms.reduce((score, term) => {
-      const hasExact = normalized.includes(term);
-      const hasToken = tokens.some((token) => token === term || token.startsWith(term));
-      return score + (hasExact || hasToken ? 1 : 0);
-    }, 0);
+    const motivatedWeight = MOTIVATED_WEIGHTS[token] ?? MOTIVATED_WEIGHTS[baseToken];
+    if (motivatedWeight) {
+      const weighted = motivatedWeight * multiplier;
+      if (negated) stressed += weighted * 0.7;
+      else motivated += weighted;
+      emotionHits += 1;
+      signals.push(`${negated ? "negated+" : "+"}${token}`);
+    }
 
-  const stressedScore = scoreTerms(stressedTerms);
-  const motivatedScore = scoreTerms(motivatedTerms);
-  const curiousScore = scoreTerms(curiousTerms);
+    const stressedWeight = STRESSED_WEIGHTS[token] ?? STRESSED_WEIGHTS[baseToken];
+    if (stressedWeight) {
+      const weighted = stressedWeight * multiplier;
+      if (negated) motivated += weighted * 0.5;
+      else stressed += weighted;
+      emotionHits += 1;
+      signals.push(`${negated ? "negated-" : "-"}${token}`);
+    }
 
-  if (stressedScore >= Math.max(motivatedScore, curiousScore) && stressedScore > 0) return "Stressed";
-  if (motivatedScore >= Math.max(stressedScore, curiousScore) && motivatedScore > 0) return "Motivated";
-  if (curiousScore > 0) return "Curious";
+    const curiousWeight = CURIOUS_WEIGHTS[token] ?? CURIOUS_WEIGHTS[baseToken];
+    if (curiousWeight) {
+      const weighted = curiousWeight * multiplier;
+      curious += weighted;
+      emotionHits += 1;
+      signals.push(`?${token}`);
+    }
 
-  return "Neutral";
+    if (ACHIEVEMENT_VERBS.has(token) || ACHIEVEMENT_VERBS.has(baseToken)) {
+      achievementScore += 1 * multiplier;
+      intentHits += 1;
+      motivated += 0.2 * multiplier;
+      signals.push(`achv:${token}`);
+      if (token === "completed" || token === "complete") motivated += 0.6;
+    }
+    if (STRATEGIC_TERMS.has(token)) {
+      strategicScore += 1;
+      intentHits += 1;
+      signals.push(`strat:${token}`);
+    }
+    if (UNCERTAINTY_TERMS.has(token)) {
+      uncertaintyScore += 1;
+      signals.push(`uncertain:${token}`);
+    }
+    if (TECH_IDENTITY_TERMS.has(token)) {
+      technicalIdentityScore += 1;
+      intentHits += 1;
+      if (technicalIdentityScore <= 3) signals.push(`tech:${token}`);
+    }
+  }
+
+  const quantifiedAchievement =
+    /\b\d+\+?\s*(projects?|models?|apps?|systems?|products?|hackathons?)\b/.test(normalizedSpaced) ||
+    /\b(completed|built|developed|delivered|done)\s+\d+\b/.test(normalizedSpaced);
+  const accoladeSignal =
+    /\b(hackathon|winner|winners|award|awards|google job|job crack|job cracked|job cracker)\b/.test(normalized);
+  if (quantifiedAchievement) {
+    achievementScore += 1.4;
+    motivated += 0.7;
+    intentHits += 1;
+    signals.push("achv:quantified");
+  }
+  if (accoladeSignal) {
+    achievementScore += 1.2;
+    motivated += 0.5;
+    intentHits += 1;
+    signals.push("achv:accolade");
+  }
+  const selfDiminishSignal = /\b(nothing special|just only)\b/.test(normalized);
+  if (selfDiminishSignal) {
+    uncertaintyScore += 0.7;
+    signals.push("frame:self-minimizing");
+  }
+
+  const questionMarks = (normalized.match(/\?/g) ?? []).length;
+  if (questionMarks > 0) curious += Math.min(2.2, questionMarks * 0.9);
+
+  const exclamations = (normalized.match(/!/g) ?? []).length;
+  if (exclamations > 0 && motivated > 0) motivated += Math.min(1.8, exclamations * 0.6);
+  if (exclamations > 0 && stressed > 0) stressed += Math.min(1.6, exclamations * 0.5);
+
+  if (/\b(i am|im|it is|this is)\s+(the\s+)?(worst|terrible|awful|hopeless)\b/.test(normalized)) {
+    stressed += 2.8;
+    signals.push("-strong-negative-phrase");
+  }
+
+  const total = motivated + stressed + curious;
+  const dominant = Math.max(motivated, stressed, curious);
+  const second = [motivated, stressed, curious].sort((a, b) => b - a)[1] ?? 0;
+  const margin = Math.max(0, dominant - second);
+  const declarativeSignal = /[.]$/.test(normalized) ? 1 : 0;
+  const tokenCount = Math.max(1, tokens.length);
+
+  let label: SentimentLabel = "Neutral";
+  if (total < 1.6) label = "Neutral";
+  else if (stressed >= motivated * 1.15 && stressed >= curious * 1.1 && stressed >= 1.8) label = "Stressed";
+  else if (motivated >= stressed * 1.05 && motivated >= curious && motivated >= 1.7) label = "Motivated";
+  else if (curious >= Math.max(motivated, stressed) && curious >= 1.5) label = "Curious";
+  else if (margin < 0.7) label = "Neutral";
+  else label = dominant === stressed ? "Stressed" : dominant === motivated ? "Motivated" : "Curious";
+
+  const emotionalClarity = total === 0 ? 0 : (margin / (total + 1.8)) * 34 + Math.min(22, total * 6);
+  const intentPower = Math.min(4, achievementScore * 0.9 + strategicScore * 0.8 + technicalIdentityScore * 0.45);
+  const intentClarity = intentPower * 6 - Math.min(16, uncertaintyScore * 6.5);
+  const structureClarity = Math.min(10, declarativeSignal * 4 + Math.min(3, questionMarks) * 2 + Math.min(3, exclamations) * 2);
+  const evidenceCount = emotionHits + intentHits + questionMarks + exclamations;
+  const evidenceDensity = evidenceCount / Math.max(4, tokenCount);
+  const neutralIntentBoost = total < 1.6 && intentPower >= 1 ? 8 : 0;
+  let confidence = Math.round(Math.max(30, Math.min(94, 32 + emotionalClarity + intentClarity + structureClarity + neutralIntentBoost)));
+  if (evidenceCount <= 1) confidence = Math.min(confidence, 58);
+  if (evidenceDensity < 0.12 && total < 2) confidence = Math.max(30, confidence - 8);
+  if (evidenceDensity > 0.3 && tokenCount >= 5) confidence = Math.min(94, confidence + 4);
+  const rawScore =
+    (motivated - stressed) * 20 +
+    achievementScore * 1.4 +
+    strategicScore * 1.2 +
+    (quantifiedAchievement ? 4 : 0) +
+    (accoladeSignal ? 3 : 0) -
+    uncertaintyScore * 5;
+  const score = Math.round((rawScore * 90) / (Math.abs(rawScore) + 90));
+
+  let toneType: SentimentAnalysis["toneType"] = "Declarative / Informational";
+  if (label === "Stressed") toneType = "Pressure / Strain";
+  else if (questionMarks > 0 || label === "Curious") toneType = "Exploratory";
+  else if (achievementScore >= 1) toneType = "Declarative / Achievement-Oriented";
+  else if (strategicScore >= 1) toneType = "Strategic / Planning";
+
+  let emotionalIntensity: SentimentAnalysis["emotionalIntensity"] = "Low";
+  if (total >= 5.4) emotionalIntensity = "High";
+  else if (total >= 2.2) emotionalIntensity = "Moderate";
+
+  if (label === "Neutral" && toneType === "Declarative / Achievement-Oriented" && uncertaintyScore === 0) {
+    confidence = Math.max(confidence, 56);
+  }
+
+  if (label === "Neutral" && emotionalIntensity === "Low") {
+    confidence = Math.min(confidence, 84);
+  }
+
+  const rawAssertiveness =
+    30 +
+    achievementScore * 14 +
+    strategicScore * 9 +
+    technicalIdentityScore * 2 +
+    (quantifiedAchievement ? 6 : 0) -
+    uncertaintyScore * 14;
+  const professionalAssertiveness = Math.round((Math.max(0, rawAssertiveness) * 92) / (Math.max(0, rawAssertiveness) + 92));
+  const adjustedAssertiveness =
+    label === "Neutral" && toneType === "Declarative / Achievement-Oriented" && uncertaintyScore === 0
+      ? Math.max(professionalAssertiveness, 52)
+      : professionalAssertiveness;
+
+  let review = "Tone is mostly informational with mixed emotional cues.";
+  if (label === "Motivated") review = "You sound optimistic and execution-focused, with clear forward momentum.";
+  if (label === "Motivated" && selfDiminishSignal) {
+    review = "Your wording is humble, but your achievements and credentials still read as strongly motivated and capable.";
+  }
+  if (label === "Stressed") review = "You sound blocked or overloaded right now; the language reflects pressure and frustration.";
+  if (label === "Curious") review = "You sound exploratory and learning-driven, asking investigative questions.";
+  if (label === "Neutral" && toneType === "Declarative / Achievement-Oriented") {
+    review = "This is factual and achievement-oriented, with implicit confidence but low emotional intensity.";
+    if (selfDiminishSignal) {
+      review = "You use a humble frame, but the content still signals strong achievement and capability.";
+    }
+  } else if (label === "Neutral" && total < 1.6) {
+    review = "This reads mostly factual; there are not enough emotional signals to classify strongly.";
+  }
+
+  return {
+    label,
+    confidence,
+    score,
+    review,
+    signals: signals.slice(0, 7),
+    toneType,
+    emotionalIntensity,
+    professionalAssertiveness: adjustedAssertiveness
+  };
+}
+
+export function detectSentiment(text: string): SentimentLabel {
+  return analyzeSentiment(text).label;
 }
 
 export function estimateComplexity(code: string): string {
@@ -554,37 +889,62 @@ function analyzeRecursion(cleanCode: string) {
 }
 
 export function scoreResume(text: string) {
-  const scoreBase = 55;
-  let score = scoreBase;
   const normalized = text.toLowerCase();
   const lines = normalized
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean);
 
-  const projectVerbRegex =
-    /\b(built|developed|implemented|designed|created|deployed|engineered|optimized|trained)\b/;
-  const projectEvidenceLines = lines.filter(
-    (line) =>
-      (line.startsWith("-") || line.startsWith("\u2022") || line.includes("project")) &&
-      projectVerbRegex.test(line)
-  );
-  const hasProjects = projectEvidenceLines.length >= 2;
-  const hasMetrics = /%|improved|reduced|increased|accuracy|latency|throughput|f1|precision|recall/.test(normalized);
-  const hasAIKeywords = /machine learning|artificial intelligence|\bai\b|tensorflow|pytorch|nlp|llm|scikit-learn/.test(normalized);
+  const actionVerbRegex =
+    /\b(built|developed|implemented|designed|created|deployed|engineered|optimized|led|improved|launched|automated)\b/;
+  const metricRegex = /\b(\d+%|\d+x|\$[\d,.]+|latency|accuracy|throughput|f1|precision|recall|reduced|increased|improved)\b/;
+  const aiKeywordRegex = /\b(machine learning|artificial intelligence|ai|tensorflow|pytorch|nlp|llm|scikit-learn|rag|transformer)\b/;
+  const sectionRegex = /\b(summary|experience|projects|education|skills|certifications)\b/;
 
-  if (hasProjects) score += 15;
-  if (hasMetrics) score += 15;
-  if (hasAIKeywords) score += 15;
+  const bulletLines = lines.filter((line) => line.startsWith("-") || line.startsWith("\u2022"));
+  const actionLines = lines.filter((line) => actionVerbRegex.test(line));
+  const metricLines = lines.filter((line) => metricRegex.test(line));
+  const aiKeywordCount = (normalized.match(aiKeywordRegex) ?? []).length;
+  const sectionCount = (normalized.match(sectionRegex) ?? []).length;
+  const words = normalized.split(/\s+/).filter(Boolean);
+  const wordCount = words.length;
+
+  let score = 20;
+
+  const projectImpact = Math.min(24, actionLines.length * 4 + metricLines.length * 3);
+  const structureQuality = Math.min(18, sectionCount * 3 + Math.min(6, bulletLines.length));
+  const roleAlignment = Math.min(18, aiKeywordCount * 4);
+  const contentDepth = wordCount < 80 ? 4 : wordCount < 160 ? 10 : wordCount < 420 ? 16 : 12;
+
+  score += projectImpact + structureQuality + roleAlignment + contentDepth;
+
+  let penalties = 0;
+  if (wordCount < 70) penalties += 10;
+  if (actionLines.length < 2) penalties += 8;
+  if (metricLines.length === 0) penalties += 10;
+  if (sectionCount < 3) penalties += 7;
+  if (aiKeywordCount > 12 && metricLines.length < 2) penalties += 6;
+
+  score = Math.max(24, Math.min(96, Math.round(score - penalties)));
+
+  const strengths: string[] = [];
+  if (actionLines.length >= 3) strengths.push("Strong action-oriented experience bullets.");
+  if (metricLines.length >= 2) strengths.push("Good use of measurable business or model outcomes.");
+  if (sectionCount >= 4) strengths.push("Resume structure is clear and recruiter-friendly.");
+  if (aiKeywordCount >= 2) strengths.push("Technical identity for AI/ML roles is visible.");
+
+  const improvements: string[] = [];
+  if (actionLines.length < 3) improvements.push("Add more action-first bullets (Built, Led, Optimized) under projects/experience.");
+  if (metricLines.length < 2) improvements.push("Quantify impact with concrete numbers (%, x, latency, accuracy, revenue).");
+  if (sectionCount < 4) improvements.push("Use clearer sections: Summary, Experience, Projects, Skills, Education.");
+  if (wordCount < 120) improvements.push("Add depth: include project context, stack, and outcomes in 2-3 bullets each.");
+  if (aiKeywordCount === 0) improvements.push("Add role-specific AI/ML terms that match your target jobs.");
+
+  const feedback = [...strengths.slice(0, 2), ...improvements.slice(0, 3)];
+  if (feedback.length === 0) feedback.push("Resume quality is balanced; tighten wording for stronger impact.");
 
   return {
     score,
-    feedback: [
-      hasProjects
-        ? "Strong project orientation detected."
-        : "Add 2-3 project bullets with action verbs (built/developed/deployed) and outcomes.",
-      hasMetrics ? "Good use of measurable outcomes." : "Include measurable metrics (latency, accuracy, growth).",
-      hasAIKeywords ? "AI/ML identity is clearly visible." : "Add AI-specific technical terms aligned to target roles."
-    ]
+    feedback
   };
 }

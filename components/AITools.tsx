@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { detectSentiment, explainComplexity, scoreResume } from "@/lib/ai";
+import { analyzeSentiment, explainComplexity, scoreResume } from "@/lib/ai";
 import ASTVisualizer from "@/components/ASTVisualizer";
 
 type Tone = "neutral" | "motivated" | "curious" | "stressed";
@@ -13,7 +13,11 @@ export default function AITools({ onToneChange }: { onToneChange: (tone: Tone) =
   const [transparencyTool, setTransparencyTool] = useState<"sentiment" | "complexity" | "resume">("sentiment");
   const [simulationRun, setSimulationRun] = useState(1);
 
-  const sentiment = sentimentInput ? detectSentiment(sentimentInput) : "-";
+  const sentimentAnalysis = useMemo(
+    () => (sentimentInput ? analyzeSentiment(sentimentInput) : null),
+    [sentimentInput]
+  );
+  const sentiment = sentimentAnalysis?.label ?? "-";
   const complexity = useMemo(() => explainComplexity(codeInput), [codeInput]);
   const resumeScore = resumeInput ? scoreResume(resumeInput) : null;
   const simulationSeed = useMemo(() => {
@@ -34,11 +38,11 @@ export default function AITools({ onToneChange }: { onToneChange: (tone: Tone) =
       return;
     }
 
-    if (sentiment === "Motivated") onToneChange("motivated");
-    else if (sentiment === "Curious") onToneChange("curious");
-    else if (sentiment === "Stressed") onToneChange("stressed");
+    if (sentimentAnalysis?.label === "Motivated") onToneChange("motivated");
+    else if (sentimentAnalysis?.label === "Curious") onToneChange("curious");
+    else if (sentimentAnalysis?.label === "Stressed") onToneChange("stressed");
     else onToneChange("neutral");
-  }, [onToneChange, sentiment, sentimentInput]);
+  }, [onToneChange, sentimentAnalysis, sentimentInput]);
 
   const transparency = {
     sentiment: {
@@ -103,6 +107,29 @@ export default function AITools({ onToneChange }: { onToneChange: (tone: Tone) =
           <p className="mt-3 text-sm text-cyan-100">
             Detected emotion: <span className="font-semibold text-white">{sentiment}</span>
           </p>
+          {sentimentAnalysis ? (
+            <div className="mt-3 space-y-1 text-xs text-cyan-200/85">
+              <p>
+                Confidence: <span className="text-white">{sentimentAnalysis.confidence}%</span>
+              </p>
+              <p>
+                Valence score: <span className="text-white">{sentimentAnalysis.score}</span>
+              </p>
+              <p>
+                Tone type: <span className="text-white">{sentimentAnalysis.toneType}</span>
+              </p>
+              <p>
+                Emotional intensity: <span className="text-white">{sentimentAnalysis.emotionalIntensity}</span>
+              </p>
+              <p>
+                Professional assertiveness: <span className="text-white">{sentimentAnalysis.professionalAssertiveness}%</span>
+              </p>
+              <p>{sentimentAnalysis.review}</p>
+              {sentimentAnalysis.signals.length > 0 ? (
+                <p className="text-cyan-300/85">Signals: {sentimentAnalysis.signals.join(", ")}</p>
+              ) : null}
+            </div>
+          ) : null}
         </ToolCard>
 
         <ToolCard title="Complexity Oracle" subtitle="Static Analysis Engine">
