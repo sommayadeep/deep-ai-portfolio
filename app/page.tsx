@@ -9,6 +9,8 @@ import AITools from "@/components/AITools";
 import AIAssistant from "@/components/AIAssistant";
 import MemoryBanner from "@/components/MemoryBanner";
 import EngineeringProof from "@/components/EngineeringProof";
+import TechnicalLogs from "@/components/TechnicalLogs";
+import NeuralFeedback from "@/components/NeuralFeedback";
 import { profile } from "@/data/profile";
 
 type Tone = "neutral" | "motivated" | "curious" | "stressed";
@@ -28,7 +30,9 @@ export default function HomePage() {
       ["Core Architecture", "core-architecture"],
       ["AI Tools", "ai-tools"],
       ["Engineering Proof", "engineering-proof"],
+      ["Technical Logs", "technical-logs"],
       ["AI Deployments", "ai-deployments"],
+      ["Neural Feedback", "neural-feedback"],
       ["Connect Protocol", "connect-protocol"]
     ],
     []
@@ -159,6 +163,7 @@ export default function HomePage() {
         <AITools onToneChange={setTone} />
 
         <EngineeringProof />
+        <TechnicalLogs />
 
         <motion.section
           id="technical-modules"
@@ -196,6 +201,7 @@ export default function HomePage() {
             {profile.deployments.map((project, index) => (
               <motion.article
                 key={project.name}
+                data-project-key={toProjectKey(project.name)}
                 className="magnetic rounded-xl border border-cyan-200/20 bg-[#0a1230]/85 p-4"
                 initial={{ opacity: 0, y: 16 }}
                 whileInView={{ opacity: 1, y: 0 }}
@@ -241,6 +247,8 @@ export default function HomePage() {
           </div>
         </motion.section>
 
+        <NeuralFeedback />
+
         <section id="connect-protocol" className="glass rounded-2xl p-6">
           <p className="panel-title text-xs text-cyan-200/70">Connect Protocol</p>
           <h2 className="mt-2 text-2xl text-white">Initiate Collaboration Request</h2>
@@ -256,4 +264,8 @@ export default function HomePage() {
       <AIAssistant />
     </main>
   );
+}
+
+function toProjectKey(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 }

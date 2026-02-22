@@ -7,11 +7,20 @@ type ChatMessage = {
   content: string;
 };
 
-type ChatAction = {
+type ScrollAction = {
   type: "scroll_to";
   targetId: string;
   highlight?: boolean;
 };
+
+type FocusProjectAction = {
+  type: "focus_project";
+  targetId: string;
+  projectKey: string;
+  highlight?: boolean;
+};
+
+type ChatAction = ScrollAction | FocusProjectAction;
 
 type SpeechCtor = new () => {
   lang: string;
@@ -118,14 +127,30 @@ export default function AIAssistant() {
   }
 
   function executeAction(action: ChatAction) {
-    if (action.type !== "scroll_to") return;
     const target = document.getElementById(action.targetId);
-    if (!target) return;
+    if (target) {
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
 
-    target.scrollIntoView({ behavior: "smooth", block: "start" });
-    if (action.highlight) {
-      target.classList.add("assistant-section-highlight");
-      window.setTimeout(() => target.classList.remove("assistant-section-highlight"), 1800);
+    if (action.type === "scroll_to") {
+      if (action.highlight && target) {
+        target.classList.add("assistant-section-highlight");
+        window.setTimeout(() => target.classList.remove("assistant-section-highlight"), 1800);
+      }
+      return;
+    }
+
+    if (action.type === "focus_project") {
+      const projectNode = document.querySelector<HTMLElement>(`[data-project-key="${action.projectKey}"]`);
+      if (!projectNode) return;
+
+      window.setTimeout(() => {
+        projectNode.scrollIntoView({ behavior: "smooth", block: "center" });
+        if (action.highlight) {
+          projectNode.classList.add("assistant-project-highlight");
+          window.setTimeout(() => projectNode.classList.remove("assistant-project-highlight"), 2000);
+        }
+      }, 220);
     }
   }
 

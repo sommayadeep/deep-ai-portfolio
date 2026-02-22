@@ -6,6 +6,11 @@ type AssistantAction = {
   type: "scroll_to";
   targetId: string;
   highlight?: boolean;
+} | {
+  type: "focus_project";
+  targetId: string;
+  projectKey: string;
+  highlight?: boolean;
 };
 
 function hasAny(text: string, patterns: string[]): boolean {
@@ -89,6 +94,10 @@ function findProject(prompt: string): Deployment | null {
   return (
     null
   );
+}
+
+function projectKey(name: string) {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 }
 
 function localAnswer(prompt: string): string {
@@ -215,11 +224,27 @@ function detectUiActions(prompt: string): AssistantAction[] {
 
   if (hasAny(text, ["sentiment", "complexity", "resume analyzer", "neuralhire", "ai tools"])) push("ai-tools");
   if (hasAny(text, ["engineering proof", "deep dive", "architecture", "research log"])) push("engineering-proof");
+  if (hasAny(text, ["technical log", "technical logs", "case study", "case studies"])) push("technical-logs");
+  if (hasAny(text, ["testimonial", "testimonials", "feedback", "collaboration logs"])) push("neural-feedback");
   if (hasAny(text, ["connect", "contact", "email", "linkedin", "github node"])) push("connect-protocol");
   if (hasAny(text, ["metrics", "dashboard", "mission control", "status"])) push("mission-control");
 
   const projectMatch = findProject(prompt);
-  if (projectMatch || hasAny(text, ["deployment", "deployments", "project", "projects", "live link", "repo"])) {
+  if (projectMatch) {
+    actions.push({
+      type: "focus_project",
+      targetId: "ai-deployments",
+      projectKey: projectKey(projectMatch.name),
+      highlight: true
+    });
+  } else if (hasAny(text, ["most complex project", "hardest project", "complex project"])) {
+    actions.push({
+      type: "focus_project",
+      targetId: "ai-deployments",
+      projectKey: projectKey("turbofan-rul-prediction"),
+      highlight: true
+    });
+  } else if (hasAny(text, ["deployment", "deployments", "project", "projects", "live link", "repo"])) {
     push("ai-deployments");
   }
 
